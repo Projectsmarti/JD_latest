@@ -12,14 +12,15 @@ seed_value = 42
 os.environ['PYTHONHASHSEED'] = str(seed_value)
 random.seed(seed_value)
 
+
 def hybrid_similarity(jd_skills, resume_skills, threshold):
     try:
         set1 = set(jd_skills)
         set2 = set(resume_skills)
 
-        matched_skills = list(set1.intersection(set2))  # Keep track of matched skills
+        matched_skills = list(set1.intersection(set2))
         not_matched = set1 - set2
-        intersection_size = len(matched_skills)  # Initialize intersection_size here
+        intersection_size = len(matched_skills)
 
         if not_matched:
             mtchd_after_lvn = []
@@ -29,7 +30,7 @@ def hybrid_similarity(jd_skills, resume_skills, threshold):
                     if leven_metric >= threshold:
                         mtchd_after_lvn.append(nm_skills)
 
-            matched_skills.extend(mtchd_after_lvn)  # Add these to matched skills
+            matched_skills.extend(mtchd_after_lvn)
             intersection_size += len(mtchd_after_lvn)
             left_over_skills = set(not_matched) - set(mtchd_after_lvn)
 
@@ -40,7 +41,7 @@ def hybrid_similarity(jd_skills, resume_skills, threshold):
                         if skl in rsm_skl:
                             final_skl_mtch.append(skl)
 
-                matched_skills.extend(final_skl_mtch)  # Add these to matched skills
+                matched_skills.extend(final_skl_mtch)
                 intersection_size += len(final_skl_mtch)
 
         union_size = len(set1)
@@ -51,6 +52,7 @@ def hybrid_similarity(jd_skills, resume_skills, threshold):
     except Exception as e:
         print(f"An error occurred in the hybrid_similarity function: {str(e)}")
         return None, None
+
 
 def extract_between_chars_regex(input_string, start_char, end_char):
     try:
@@ -65,13 +67,15 @@ def extract_between_chars_regex(input_string, start_char, end_char):
         print(f"An error occurred in the extract_between_chars_regex function: {str(e)}")
         return None
 
+
 def jd_skills_data_prep(text):
     try:
         skills = str(text).lower()
         skills = extract_between_chars_regex(skills, '[', ']')
         if skills is not None:
             skills = skills.replace('"', '').replace("'", "").replace(")", "").replace(" and", ", ").replace("&",
-                                                                                                                ", ")
+                                                                                                             ", ").replace(
+                "/", ", ")
             skills = skills.split(", ")
         else:
             skills = []
@@ -79,6 +83,7 @@ def jd_skills_data_prep(text):
     except Exception as e:
         print(f"An error occurred in the jd_skills_data_prep function: {str(e)}")
         return []
+
 
 def get_palm_response(text, prompt):
     try:
@@ -93,12 +98,11 @@ def get_palm_response(text, prompt):
         print(f"An error occurred in the get_palm_response function: {str(e)}")
         return None
 
+
 def get_jd_skills_and_exp(jd_text):
-    # Prompts
     prompt1 = " Return python list with skill names only picked from above text"
     prompt2 = " Return minimum experience in years number only"
 
-    # Skills
     skills = get_palm_response(prompt1, jd_text)
     skills = skills.lower()
     try:
@@ -106,7 +110,8 @@ def get_jd_skills_and_exp(jd_text):
     except:
         skills = jd_skills_data_prep(skills)
 
-    # Experience
+    skills = [skill.replace('&', ',') for skill in skills]
+
     try:
         experience = float(get_palm_response(prompt2, jd_text))
     except Exception as e:
@@ -114,6 +119,7 @@ def get_jd_skills_and_exp(jd_text):
         experience = None
 
     return jd_text, skills, experience
+
 
 st.set_page_config(
     page_title="JD Parsing App",
@@ -161,64 +167,68 @@ else:
         </style>
         """, unsafe_allow_html=True)
 
-    if jd_full_text.strip() == '':
-        st.warning("No JD passed.")
-    elif len(jd_full_text.split()) < 25:
-        st.warning("Input has less than 25 words.")
-    else:
-        if st.button("Extract Skills and Experience"):
-            jd_full_text, jd_skills, jd_experience = get_jd_skills_and_exp(jd_full_text)
-            st.write(f"SKILLS REQUIRED: {jd_skills}")
-            st.write(f"EXPERIENCE REQUIRED: {jd_experience}")
+    if st.button("Extract Skills and Experience"):
+        jd_full_text, jd_skills, jd_experience = get_jd_skills_and_exp(jd_full_text)
+        st.write(f"SKILLS REQUIRED: {jd_skills}")
+        st.write(f"EXPERIENCE REQUIRED: {jd_experience}")
 
-        resume_data = pd.read_csv("Resume_Parsed_Sample_v4_with_exp_refurb.csv")
+    resume_data = pd.read_csv("Resume_Parsed_Sample_v4_with_exp_refurb.csv")
 
-        if st.button("Matched Resumes"):
-            jd_full_text, jd_skills, jd_experience = get_jd_skills_and_exp(jd_full_text)
-            st.write(f"SKILLS REQUIRED: {jd_skills}")
-            st.write(f"EXPERIENCE REQUIRED: {jd_experience}")
+    if st.button("Matched Resumes"):
+        jd_full_text, jd_skills, jd_experience = get_jd_skills_and_exp(jd_full_text)
+        st.write(f"SKILLS REQUIRED: {jd_skills}")
+        st.write(f"EXPERIENCE REQUIRED: {jd_experience}")
 
-            threshold = 90
-            final_list = []
-            for j, res_row in resume_data.iterrows():
-                jd_skill_similarity, matched_skills = hybrid_similarity(jd_skills, eval(res_row[3]), threshold)
-                Missing_Skills = list(set(jd_skills) - set(eval(res_row[3])))
-                additional_skills = list(set(eval(res_row[3])) - set(jd_skills))
-                # matched_skills = list(set(matched_skills))
-                # Calculate matched skills
-                matched_skills = list(set(jd_skills) - set(Missing_Skills))
+        threshold = 90
+        final_list = []
+        for j, res_row in resume_data.iterrows():
+            jd_skill_similarity, matched_skills = hybrid_similarity(jd_skills, eval(res_row[3]), threshold)
+            Missing_Skills = list(set(jd_skills) - set(eval(res_row[3])))
+            additional_skills = list(set(eval(res_row[3])) - set(jd_skills))
+            matched_skills = list(set(jd_skills) - set(Missing_Skills))
 
-                final_list.append(
-                    [jd_skills, jd_experience, res_row[0], res_row[3], additional_skills, res_row[5],
-                     jd_skill_similarity, matched_skills])
+            final_list.append(
+                [jd_skills, jd_experience, res_row[0], res_row[3], additional_skills, res_row[5],
+                 jd_skill_similarity, matched_skills])
 
-            final_data = pd.DataFrame(final_list,
-                                      columns=['JD_Skills', 'JD_Experience', 'Sl.No', 'Required_Skills',
-                                               'Additional_skills', 'Experience', 'Skill_Similarity',
-                                               'Matched_Skills'])
+        final_data = pd.DataFrame(final_list,
+                                  columns=['JD_Skills', 'JD_Experience', 'Sl.No', 'Required_Skills',
+                                           'Additional_skills', 'Experience', 'Skill_Similarity',
+                                           'Matched_Skills'])
 
-            df_xlsx = pd.read_csv('unicode-update_ltst_resume.csv')
-            df_xlsx.rename(columns={'resume_index': 'Sl.No'}, inplace=True)
+        df_xlsx = pd.read_csv("unicode-update_ltst_resume.csv")
+        df_xlsx.rename(columns={'resume_index': 'Sl.No'}, inplace=True)
 
-            final_data = pd.merge(final_data,
-                                  df_xlsx[['Sl.No', 'Unique_ID', 'Name', 'Phone Number', 'Email id',
-                                           'Location of work', 'Position Applied For']], on='Sl.No')
+        final_data = pd.merge(final_data,
+                              df_xlsx[['Sl.No', 'Unique_ID', 'Name', 'Phone Number', 'Email id',
+                                       'Location of work', 'Position Applied For']], on='Sl.No')
 
-            final_data['Experience_Tag'] = final_data[['JD_Experience', 'Experience']].apply(
-                lambda x: 1 if x['Experience'] >= x['JD_Experience'] else 0, axis=1)
+        final_data['Experience_Tag'] = final_data[['JD_Experience', 'Experience']].apply(
+            lambda x: 1 if x['Experience'] >= x['JD_Experience'] else 0, axis=1)
 
-            final_data['Matching_Score'] = final_data[['Skill_Similarity', 'Experience_Tag']].apply(
-                lambda x: (x['Skill_Similarity'] + x['Experience_Tag']) / 2 if x['Skill_Similarity'] > 0 else 0,
-                axis=1)
-            final_data['Additional_skills'] = final_data['Additional_skills'].apply(
-                lambda x: 'No additional skills' if not x else x)
-            # final_data['Matched_Skills'] = final_data['Matched_Skills'].apply(lambda x: x if x else 'No skills matched')
+        final_data['Matching_Score'] = final_data[['Skill_Similarity', 'Experience_Tag']].apply(
+            lambda x: (x['Skill_Similarity'] + x['Experience_Tag']) / 2 if x['Skill_Similarity'] > 0 else 0,
+            axis=1)
+        final_data['Additional_skills'] = final_data['Additional_skills'].apply(
+            lambda x: 'No additional skills' if not x else x)
 
-            final_data = final_data.sort_values(['Matching_Score'], ascending=[False]).reset_index(drop=True)
-            final_data['Matching_Score'] = final_data['Matching_Score'].apply(
-                lambda x: str(int(x * 100)) + '%')
-            top_5_matches = final_data[['Unique_ID', 'Name', 'Matching_Score', 'Experience', 'Matched_Skills',
-                                        'Additional_skills', 'Phone Number', 'Email id']]
-            top_5_matches = top_5_matches.head(5)
-            top_5_matches
+        final_data = final_data.sort_values(['Matching_Score'], ascending=[False]).reset_index(drop=True)
+        final_data['Matching_Score'] = final_data['Matching_Score'].apply(
+            lambda x: str(int(x * 100)) + '%')
+        final_data['Experience'] = final_data['Experience'].apply(lambda x: round(x, 2))
+        final_data = final_data[final_data['Experience'] >= final_data['JD_Experience']]
+        top_5_matches = final_data[['Unique_ID', 'Name', 'Matching_Score', 'Experience', 'Matched_Skills',
+                                    'Additional_skills', 'Phone Number', 'Email id']]
+        top_5_matches = top_5_matches.head(5)
 
+        base_url = "https://storage.googleapis.com/demo_jd_bucket-1/GCP/"
+        top_5_matches['View'] = top_5_matches['Unique_ID'].apply(
+            lambda x: base_url + x + '.pdf' if x.startswith('UN') else x)
+        buttons = ""
+        for i, row in top_5_matches.iterrows():
+            link = f'<a href="{row["View"]}" target="_blank"><input type="button" value="{row["Unique_ID"]}" style="background-color: #8a2be2; color: white;"></a>'
+            buttons += link + " "
+
+        top_5_matches = top_5_matches.drop(columns=['View'], axis=1)
+        top_5_matches
+        st.markdown(f'<div style="text-align: center">{buttons}</div>', unsafe_allow_html=True)
